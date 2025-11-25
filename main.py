@@ -55,13 +55,13 @@ def check_and_notify():
         name, price, expire_date = sub
         _, days_left = calculate_days_left(expire_date)
         
-        # 提前3天和到期当天提醒
-        if days_left in [3, 1, 0]:
-            title = f"💰 续费提醒：{name}"
+        # 提前7天内提醒
+        if days_left <= 7 and days_left >= 0:
+            title = f"【订阅提醒】{name} 即将到期"
             if days_left == 0:
-                body = f"🚨 今天到期！费用 ¥{price}"
+                body = f"您的 {name} (¥{price}) 今天到期！"
             else:
-                body = f"⏰ {days_left}天后到期，费用 ¥{price}"
+                body = f"您的 {name} (¥{price}) 将在 {days_left} 天后到期！"
             
             url = f"https://api.day.app/{BARK_KEY}/{title}/{body}"
             try:
