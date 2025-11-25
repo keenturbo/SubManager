@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 import os
 
 # --- 配置区 ---
-BARK_KEY = os.getenv("BARK_KEY", "你的Bark_Key_填在这里")  # 可通过环境变量传入
+BARK_KEY = os.getenv("BARK_KEY", "bYxQeRvPAP28SZqtCyd6SR")  # 可通过环境变量传入
 DB_FILE = "sub.db"
 
 # --- 数据模型 ---
