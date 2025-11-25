@@ -24,23 +24,17 @@
         </div>
 
         <!-- 统计卡片区 -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
             <div class="bg-indigo-600 rounded-2xl p-6 text-white shadow-lg shadow-indigo-200">
-                <div class="text-indigo-200 text-sm font-medium mb-1">每月固定支出</div>
-                <div class="text-4xl font-bold mb-2">¥{{ summary.monthly_total }}</div>
-                <div class="text-indigo-200 text-xs">年支出约 ¥{{ summary.yearly_total }}</div>
+                <div class="text-indigo-200 text-sm font-medium mb-1">总支出金额</div>
+                <div class="text-4xl font-bold mb-2">¥{{ summary.total_cost }}</div>
+                <div class="text-indigo-200 text-xs">所有订阅费用总和</div>
             </div>
             
             <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                <div class="text-gray-500 text-sm font-medium mb-1">即将扣款 (7天内)</div>
+                <div class="text-gray-500 text-sm font-medium mb-1">即将到期 (7天内)</div>
                 <div class="text-4xl font-bold text-gray-800 mb-2">{{ summary.upcoming }}</div>
-                <div class="text-gray-400 text-xs">请检查余额充足</div>
-            </div>
-
-            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                <div class="text-gray-500 text-sm font-medium mb-1">活跃订阅数</div>
-                <div class="text-4xl font-bold text-gray-800 mb-2">{{ subs.length }}</div>
-                <div class="text-gray-400 text-xs">一切正常</div>
+                <div class="text-gray-400 text-xs">请及时续费</div>
             </div>
         </div>
 
@@ -60,7 +54,7 @@
                         </div>
                         <div>
                             <div class="font-bold text-gray-800">{{ sub.name }}</div>
-                            <div class="text-xs text-gray-500">{{ sub.category }} · 每月{{ sub.cycle_day }}日</div>
+                            <div class="text-xs text-gray-500">{{ sub.category }}</div>
                         </div>
                     </div>
                     <div class="font-bold text-xl">¥{{ sub.price }}</div>
@@ -68,9 +62,9 @@
 
                 <div class="pl-3 mt-4 flex justify-between items-end border-t border-gray-50 pt-3">
                     <div>
-                        <div class="text-xs text-gray-400">下一次扣款</div>
+                        <div class="text-xs text-gray-400">到期时间</div>
                         <div :class="{'text-red-500 font-bold': sub.days_left <= 3, 'text-gray-700': sub.days_left > 3}">
-                            {{ sub.days_left }} 天后
+                            {{ sub.days_left }}天后 ({{ sub.expire_date }})
                         </div>
                     </div>
                     <button @click="deleteSub(sub.id)" class="text-gray-300 hover:text-red-500 text-sm opacity-0 group-hover:opacity-100 transition">删除</button>
@@ -83,9 +77,12 @@
             <div class="bg-white rounded-xl p-6 w-96 shadow-2xl">
                 <h3 class="text-lg font-bold mb-4">添加新订阅</h3>
                 <div class="space-y-3">
-                    <input v-model="newSub.name" placeholder="名称 (如 Netflix)" class="w-full border p-2 rounded">
-                    <input v-model="newSub.price" type="number" placeholder="金额 (元)" class="w-full border p-2 rounded">
-                    <input v-model="newSub.cycle_day" type="number" placeholder="扣款日 (1-31)" class="w-full border p-2 rounded">
+                    <input v-model="newSub.name" placeholder="名称 (如 腾讯云VPS)" class="w-full border p-2 rounded">
+                    <input v-model="newSub.price" type="number" step="0.01" placeholder="金额 (元)" class="w-full border p-2 rounded">
+                    <div>
+                        <label class="block text-sm text-gray-600 mb-1">到期日期</label>
+                        <input v-model="newSub.expire_date" type="date" class="w-full border p-2 rounded">
+                    </div>
                     <select v-model="newSub.category" class="w-full border p-2 rounded">
                         <option value="生活服务">生活服务</option>
                         <option value="数码软件">数码软件</option>
@@ -114,9 +111,15 @@
         createApp({
             setup() {
                 const subs = ref([])
-                const summary = ref({ monthly_total: 0, yearly_total: 0, upcoming: 0 })
+                const summary = ref({ total_cost: 0, upcoming: 0 })
                 const showAddModal = ref(false)
-                const newSub = ref({ name: '', price: '', cycle_day: '', category: '生活服务', color: 'blue' })
+                const newSub = ref({ 
+                    name: '', 
+                    price: '', 
+                    expire_date: '', 
+                    category: '生活服务', 
+                    color: 'blue' 
+                })
 
                 const fetchSubs = async () => {
                     const res = await fetch('/api/subs')
@@ -126,13 +129,29 @@
                 }
 
                 const addSub = async () => {
+                    // 数据验证
+                    if (!newSub.value.name || !newSub.value.price || !newSub.value.expire_date) {
+                        alert('请填写完整信息')
+                        return
+                    }
+
+                    // 类型转换
+                    const payload = {
+                        name: newSub.value.name,
+                        price: parseFloat(newSub.value.price),
+                        expire_date: newSub.value.expire_date,
+                        category: newSub.value.category,
+                        color: newSub.value.color
+                    }
+
                     await fetch('/api/subs', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(newSub.value)
+                        body: JSON.stringify(payload)
                     })
+                    
                     showAddModal.value = false
-                    newSub.value = { name: '', price: '', cycle_day: '', category: '生活服务', color: 'blue' }
+                    newSub.value = { name: '', price: '', expire_date: '', category: '生活服务', color: 'blue' }
                     fetchSubs()
                 }
 
