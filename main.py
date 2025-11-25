@@ -11,7 +11,7 @@ import os
 
 # --- 配置区 ---
 BARK_KEY = os.getenv("BARK_KEY", "你的barkkey")
-DB_FILE = "sub.db"
+DB_FILE = "/data/sub.db"  # 修改：数据库放在 /data 目录
 
 # --- 数据模型（支持到期日期） ---
 class Subscription(BaseModel):
@@ -23,6 +23,9 @@ class Subscription(BaseModel):
 
 # --- 数据库初始化 ---
 def init_db():
+    # 确保 /data 目录存在
+    os.makedirs("/data", exist_ok=True)
+    
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS subs
