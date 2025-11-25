@@ -10,14 +10,14 @@ from contextlib import asynccontextmanager
 import os
 
 # --- 配置区 ---
-BARK_KEY = os.getenv("BARK_KEY", "你的barkkey")  # 可通过环境变量传入
+BARK_KEY = os.getenv("BARK_KEY", "你的barkkey")
 DB_FILE = "sub.db"
 
-# --- 数据模型 ---
+# --- 数据模型（支持到期日期） ---
 class Subscription(BaseModel):
     name: str
     price: float
-    cycle_day: int
+    expire_date: str  # 格式：2026-01-18
     category: str
     color: str = "blue"
 
@@ -27,58 +27,45 @@ def init_db():
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS subs
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  name TEXT, price REAL, cycle_day INTEGER, 
+                  name TEXT, price REAL, expire_date TEXT, 
                   category TEXT, color TEXT)''')
     conn.commit()
     conn.close()
 
-# --- 核心逻辑：计算下一次扣款日和剩余天数 ---
-def calculate_next_bill(cycle_day):
+# --- 核心逻辑：计算剩余天数 ---
+def calculate_days_left(expire_date_str):
     today = datetime.date.today()
-    try:
-        this_month_bill = datetime.date(today.year, today.month, cycle_day)
-    except ValueError:
-        this_month_bill = datetime.date(today.year, today.month, 28)
-
-    if this_month_bill >= today:
-        next_bill = this_month_bill
-    else:
-        if today.month == 12:
-            next_bill = datetime.date(today.year + 1, 1, cycle_day)
-        else:
-            try:
-                next_bill = datetime.date(today.year, today.month + 1, cycle_day)
-            except ValueError:
-                next_bill = datetime.date(today.year, today.month + 1, 28)
-    
-    days_left = (next_bill - today).days
-    return next_bill.strftime("%Y-%m-%d"), days_left
+    expire_date = datetime.datetime.strptime(expire_date_str, "%Y-%m-%d").date()
+    days_left = (expire_date - today).days
+    return expire_date_str, days_left
 
 # --- Bark 通知任务 ---
 def check_and_notify():
     print(f"[{datetime.datetime.now()}] 开始检查订阅到期情况...")
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT name, price, cycle_day FROM subs")
+    c.execute("SELECT name, price, expire_date FROM subs")
     subs = c.fetchall()
     conn.close()
 
     for sub in subs:
-        name, price, cycle_day = sub
-        _, days_left = calculate_next_bill(cycle_day)
+        name, price, expire_date = sub
+        _, days_left = calculate_days_left(expire_date)
         
-        if days_left == 3 or days_left == 0:
-            title = f"订阅续费提醒：{name}"
-            body = f"您的 {name} 将在 {days_left} 天后扣款 {price} 元。"
+        # 提前3天和到期当天提醒
+        if days_left in [3, 1, 0]:
+            title = f"💰 续费提醒：{name}"
             if days_left == 0:
-                body = f"您的 {name} 今天扣款 {price} 元！"
+                body = f"🚨 今天到期！费用 ¥{price}"
+            else:
+                body = f"⏰ {days_left}天后到期，费用 ¥{price}"
             
             url = f"https://api.day.app/{BARK_KEY}/{title}/{body}"
             try:
-                requests.get(url)
-                print(f"推送成功: {name}")
+                requests.get(url, timeout=5)
+                print(f"✅ 推送成功: {name}")
             except Exception as e:
-                print(f"推送失败: {e}")
+                print(f"❌ 推送失败: {e}")
 
 # --- 生命周期管理 ---
 @asynccontextmanager
@@ -113,12 +100,12 @@ def get_subs():
     conn.close()
     
     result = []
-    total_monthly = 0
+    total_cost = 0
     upcoming_count = 0
     
     for row in rows:
-        next_date, days_left = calculate_next_bill(row[3])
-        total_monthly += row[2]
+        expire_date, days_left = calculate_days_left(row[3])
+        total_cost += row[2]
         if days_left <= 7:
             upcoming_count += 1
             
@@ -126,10 +113,9 @@ def get_subs():
             "id": row[0],
             "name": row[1],
             "price": row[2],
-            "cycle_day": row[3],
+            "expire_date": row[3],
             "category": row[4],
             "color": row[5],
-            "next_date": next_date,
             "days_left": days_left
         })
     
@@ -138,8 +124,7 @@ def get_subs():
     return {
         "subscriptions": result,
         "summary": {
-            "monthly_total": total_monthly,
-            "yearly_total": total_monthly * 12,
+            "total_cost": round(total_cost, 2),
             "upcoming": upcoming_count
         }
     }
@@ -148,8 +133,8 @@ def get_subs():
 def add_sub(sub: Subscription):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("INSERT INTO subs (name, price, cycle_day, category, color) VALUES (?, ?, ?, ?, ?)",
-              (sub.name, sub.price, sub.cycle_day, sub.category, sub.color))
+    c.execute("INSERT INTO subs (name, price, expire_date, category, color) VALUES (?, ?, ?, ?, ?)",
+              (sub.name, sub.price, sub.expire_date, sub.category, sub.color))
     conn.commit()
     conn.close()
     return {"status": "ok"}
