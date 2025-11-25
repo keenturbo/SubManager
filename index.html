@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>订阅管家</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+    <div id="app" class="max-w-5xl mx-auto p-6">
+        
+        <!-- 顶部标题栏 -->
+        <div class="flex justify-between items-center mb-8">
+            <div class="flex items-center gap-2">
+                <span class="bg-indigo-600 text-white p-2 rounded-lg">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                </span>
+                <h1 class="text-2xl font-bold text-indigo-900">订阅管家</h1>
+            </div>
+            <button @click="showAddModal = true" class="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition">
+                + 添加订阅
+            </button>
+        </div>
+
+        <!-- 统计卡片区 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <div class="bg-indigo-600 rounded-2xl p-6 text-white shadow-lg shadow-indigo-200">
+                <div class="text-indigo-200 text-sm font-medium mb-1">每月固定支出</div>
+                <div class="text-4xl font-bold mb-2">¥{{ summary.monthly_total }}</div>
+                <div class="text-indigo-200 text-xs">年支出约 ¥{{ summary.yearly_total }}</div>
+            </div>
+            
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                <div class="text-gray-500 text-sm font-medium mb-1">即将扣款 (7天内)</div>
+                <div class="text-4xl font-bold text-gray-800 mb-2">{{ summary.upcoming }}</div>
+                <div class="text-gray-400 text-xs">请检查余额充足</div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                <div class="text-gray-500 text-sm font-medium mb-1">活跃订阅数</div>
+                <div class="text-4xl font-bold text-gray-800 mb-2">{{ subs.length }}</div>
+                <div class="text-gray-400 text-xs">一切正常</div>
+            </div>
+        </div>
+
+        <!-- 订阅列表 -->
+        <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+            我的订阅 <span class="ml-2 bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">{{ subs.length }}</span>
+        </h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div v-for="sub in subs" :key="sub.id" class="bg-white rounded-xl p-5 shadow-sm hover:shadow-md transition border border-gray-100 relative overflow-hidden group">
+                <div :class="`absolute left-0 top-0 bottom-0 w-1.5 bg-${sub.color}-500`"></div>
+                
+                <div class="flex justify-between items-start mb-4 pl-3">
+                    <div class="flex items-center gap-3">
+                        <div :class="`w-10 h-10 rounded-lg bg-${sub.color}-100 flex items-center justify-center text-${sub.color}-600 font-bold text-lg`">
+                            {{ sub.name[0].toUpperCase() }}
+                        </div>
+                        <div>
+                            <div class="font-bold text-gray-800">{{ sub.name }}</div>
+                            <div class="text-xs text-gray-500">{{ sub.category }} · 每月{{ sub.cycle_day }}日</div>
+                        </div>
+                    </div>
+                    <div class="font-bold text-xl">¥{{ sub.price }}</div>
+                </div>
+
+                <div class="pl-3 mt-4 flex justify-between items-end border-t border-gray-50 pt-3">
+                    <div>
+                        <div class="text-xs text-gray-400">下一次扣款</div>
+                        <div :class="{'text-red-500 font-bold': sub.days_left <= 3, 'text-gray-700': sub.days_left > 3}">
+                            {{ sub.days_left }} 天后
+                        </div>
+                    </div>
+                    <button @click="deleteSub(sub.id)" class="text-gray-300 hover:text-red-500 text-sm opacity-0 group-hover:opacity-100 transition">删除</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 添加订阅弹窗 -->
+        <div v-if="showAddModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-xl p-6 w-96 shadow-2xl">
+                <h3 class="text-lg font-bold mb-4">添加新订阅</h3>
+                <div class="space-y-3">
+                    <input v-model="newSub.name" placeholder="名称 (如 Netflix)" class="w-full border p-2 rounded">
+                    <input v-model="newSub.price" type="number" placeholder="金额 (元)" class="w-full border p-2 rounded">
+                    <input v-model="newSub.cycle_day" type="number" placeholder="扣款日 (1-31)" class="w-full border p-2 rounded">
+                    <select v-model="newSub.category" class="w-full border p-2 rounded">
+                        <option value="生活服务">生活服务</option>
+                        <option value="数码软件">数码软件</option>
+                        <option value="娱乐影音">娱乐影音</option>
+                    </select>
+                    <select v-model="newSub.color" class="w-full border p-2 rounded">
+                        <option value="blue">蓝色</option>
+                        <option value="green">绿色</option>
+                        <option value="yellow">黄色</option>
+                        <option value="red">红色</option>
+                        <option value="purple">紫色</option>
+                    </select>
+                </div>
+                <div class="flex gap-3 mt-6">
+                    <button @click="showAddModal = false" class="flex-1 bg-gray-100 py-2 rounded text-gray-600">取消</button>
+                    <button @click="addSub" class="flex-1 bg-indigo-600 text-white py-2 rounded">保存</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue
+        
+        createApp({
+            setup() {
+                const subs = ref([])
+                const summary = ref({ monthly_total: 0, yearly_total: 0, upcoming: 0 })
+                const showAddModal = ref(false)
+                const newSub = ref({ name: '', price: '', cycle_day: '', category: '生活服务', color: 'blue' })
+
+                const fetchSubs = async () => {
+                    const res = await fetch('/api/subs')
+                    const data = await res.json()
+                    subs.value = data.subscriptions
+                    summary.value = data.summary
+                }
+
+                const addSub = async () => {
+                    await fetch('/api/subs', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(newSub.value)
+                    })
+                    showAddModal.value = false
+                    newSub.value = { name: '', price: '', cycle_day: '', category: '生活服务', color: 'blue' }
+                    fetchSubs()
+                }
+
+                const deleteSub = async (id) => {
+                    if(confirm('确定删除吗？')) {
+                        await fetch(`/api/subs/${id}`, { method: 'DELETE' })
+                        fetchSubs()
+                    }
+                }
+
+                onMounted(fetchSubs)
+
+                return { subs, summary, showAddModal, newSub, addSub, deleteSub }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>
